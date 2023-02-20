@@ -4,35 +4,14 @@ import type { RequestEvent } from '@sveltejs/kit';
 import { renderGraphiQL } from '@graphql-yoga/render-graphiql';
 import { mysqlconnFn  } from '$lib/db/connection';
 import { v4 as uuidv4 } from 'uuid';
-
-
-// Sample dummy JSON data
-let users = [
-    { id: 1, name: 'Alice', age: 25, email: 'alice@example.com', complete: true},
-    { id: 2, name: 'Bob', age: 30, email: 'bob@example.com', complete: false }
-  ];
+import { writeFile } from 'fs/promises';
+import { exec } from 'child_process';
 
 const yogaApp = createYoga<RequestEvent>({
 	logging: false,
 	schema: createSchema({
         typeDefs: `
-        type User {
-            id: Int!
-            name: String!
-            email: String!
-            age: Int!
-            complete: Boolean!
-          }
-          type Query {
-            users: [User!]!
-          }
-          type Mutation {
-            createUser(name: String!, email: String!, age: Int!, complete: Boolean!): User!
-            updateUser(id: Int!, complete: Boolean!): User!
-            deleteUser(id: Int!): User
-          }
-
-          type Persons {
+         type Persons {
             id: String!
             name: String!
             email: String!
@@ -47,16 +26,17 @@ const yogaApp = createYoga<RequestEvent>({
             updatePerson(id: String!, complete: Boolean!): Persons!
             deletePerson(id: String!): Persons
           }
+
+          type Message {
+            message: String
+          }
+          type Mutation {
+            generatePDF: Message
+          }
           
 		`,
 		resolvers: {
-            Query: {
-
-              users: () => {
-                 //console.log(users)
-                 return users;
-              },
-               // Get all persons
+            Query: {// Get all persons
               persons: async () => {  
                   let connection = await mysqlconnFn();
                   const [rows,fields] = await connection.query('SELECT * FROM users');
@@ -64,33 +44,7 @@ const yogaApp = createYoga<RequestEvent>({
                   return rows
               },
             },
-            Mutation: {
-                createUser: (_, { name, age, email, complete }) => {
-                  const newUser = { id: users.length + 1, name, age, email, complete };
-                  users.push(newUser);
-                  return newUser;
-                },
-                deleteUser: (parent, args, context, inf) => {
-                    const id = args.id;
-                    users = users.filter((user) => user.id !== id);
-                    console.log(`User with id ${id} deleted.`);
-                    return id;
-                  },
-                updateUser: (parent, args) => {
-                    const userIndex = users.findIndex(user => user.id === args.id);
-                    if (userIndex === -1) {
-                      throw new Error('User not found');
-                    }                    
-                    const user = {
-                      ...users[userIndex],
-                      ...args,
-                    };
-                    users[userIndex] = user;
-                    return user;
-                  },
-                
-                
-                createPerson: async (_, { name, age, email, complete }) => {
+            Mutation: { createPerson: async (_, { name, age, email, complete }) => {
                     const id = uuidv4();
                     try {
                       const connection = await mysqlconnFn();
@@ -124,6 +78,40 @@ const yogaApp = createYoga<RequestEvent>({
                     return null;
                   }
                   },
+
+                  generatePDF: async () => {
+                    let connection = await mysqlconnFn();
+                   // query the database
+                   const [rows, fields] = await connection.execute('SELECT * FROM users');
+                        // write the query results to a JSON file
+                  await writeFile('data.json', JSON.stringify({rows}));
+
+                  // close the MySQL connection pool
+                 // await connection.end();
+
+                  // return a success message
+                
+                  
+                    try {
+                      await new Promise((resolve, reject) => {
+                        exec(`jsreport render --template.content=src/lib/sample.html --template.engine=handlebars --data=data.json --template.recipe=chrome-pdf --out=src/lib/new.pdf`, (error, stdout, stderr) => {
+                          if (error) {
+                            console.error(`exec error: ${error}`);
+                            reject(error);
+                          } else {
+                            console.log(`stdout: ${stdout}`);
+                            console.error(`stderr: ${stderr}`);
+                            resolve();
+                          }
+                        });
+                      });
+                      
+                      return {message: 'src/lib/new.pdf'}
+                    } catch (error) {
+                      throw new Error(error.message);
+                    }
+                  },
+                  
               }
           }
 	}),

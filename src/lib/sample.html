@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>JSON to PDF</title>
+  </head>
+  <body>
+    <h1>JSON to PDF</h1>
+    {{#each rows}}
+    <tr class="item">
+      <li>{{name}} - {{email}} - Age: {{age}}</li>
+      
+      <label>
+      {{#if complete}}
+   
+        <input type="checkbox" checked="{{complete}}"/>
+      
+         {{/if}}
+         Complete
+        </label>
+
+      <button>DELETE</button>
+    </tr>
+    {{/each}}
+    <script>
+          
+    </script>
+  </body>
+</html>
